@@ -68,3 +68,10 @@ NUXT_PUBLIC_API_BASE=https://api.ejemplo.com/api/v1 NUXT_PUBLIC_APP_ENV=producti
 - **Rutas:** todas deben responder con `index.html` (o `200.html`).
 - **HTTPS:** es obligatorio para el service worker y para el Bluetooth.
 - **Configuración por entorno:** las variables quedan fijas al compilar, así que cada entorno (QA, producción) se compila por separado.
+
+**Con Docker:** el `Dockerfile` compila el POS y lo sirve con nginx (`nginx.conf.template`), escuchando en `PORT` (3000 por defecto). No hay servidor de Node: no se arranca con `node .output/server/index.mjs`. Las variables se pasan como argumentos de compilación, no al arrancar el contenedor:
+
+```bash
+docker build -t falco-pos --build-arg NUXT_PUBLIC_API_BASE=https://api.ejemplo.com/api/v1 --build-arg NUXT_PUBLIC_APP_ENV=production .
+docker run -p 3000:3000 falco-pos
+```
