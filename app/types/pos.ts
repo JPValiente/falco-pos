@@ -1,3 +1,5 @@
+import type { TaxIdRule } from '~/utils/taxIds'
+
 /** What falco-core answers (PosDtos) and what the device keeps (IndexedDB, see utils/db.ts). */
 
 export interface NamedRef {
@@ -78,8 +80,13 @@ export interface Catalog {
     legalName: string | null
     taxId: string | null
     taxIdLabel: string
+    /** How a customer's tax id is checked without internet; missing in catalogs before FA-016. */
+    taxIdRule?: TaxIdRule
     address: string | null
     phone: string | null
+    /** The country's phones (FA-016); missing in older catalogs. */
+    phoneCode?: string
+    phoneDigits?: number
     currency: string
     locale: string
     timezone: string
@@ -92,6 +99,8 @@ export interface Catalog {
   products: Product[]
   /** Groups of options the products offer (FA-014); missing in catalogs downloaded before they existed. */
   optionGroups?: OptionGroup[]
+  /** Expected waste (%) of the supplies the recipes and options use, by product id (FA-015); missing in older catalogs. */
+  supplyWaste?: Record<string, number>
   finalConsumer: Customer
   generatedAt: string
 }
@@ -158,6 +167,18 @@ export interface Customer {
   code: string | null
   name: string
   taxId: string | null
+  phone?: string | null
+  address?: string | null
+  /** Created on the device without internet (FA-016): `id` is the device's, and it goes to Falco with the sale. */
+  local?: boolean
+}
+
+/** What the seller fills to create a customer (FA-016). */
+export interface NewCustomer {
+  name: string
+  taxId: string
+  phone?: string
+  address?: string
 }
 
 // ---- Selling

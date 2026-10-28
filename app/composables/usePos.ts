@@ -1,5 +1,5 @@
 import type {
-  AppContext, CartLine, CartOption, Catalog, ClaimResult, Customer, LocalSale, LocalShift, OpenAccount, OptionGroup, Payment,
+  AppContext, CartLine, CartOption, Catalog, ClaimResult, Customer, LocalSale, LocalShift, NewCustomer, OpenAccount, OptionGroup, Payment,
   Product, Setup, ShiftClosing, Station, StockAlert, SyncResult, Terminal
 } from '~/types/pos'
 
@@ -21,6 +21,8 @@ interface State {
   accounts: OpenAccount[]
   cart: CartLine[]
   customer: Customer | null
+  /** Customers created on the device without internet that Falco does not have yet (FA-016). */
+  localCustomers: Customer[]
   /** The station whose open account is being served; null: a direct sale. */
   stationId: string | null
   online: boolean
@@ -45,6 +47,7 @@ const state = reactive<State>({
   accounts: [],
   cart: [],
   customer: null,
+  localCustomers: [],
   stationId: null,
   online: true,
   syncing: false,
@@ -92,6 +95,7 @@ export function usePos() {
       state.lastSyncAt = (await db.get<string>('kv', 'lastSyncAt')) ?? null
       state.canSell = (await db.get<boolean>('kv', 'canSell')) ?? true
       state.alerts = (await db.get<StockAlert[]>('kv', 'alerts')) ?? []
+      state.localCustomers = (await db.get<Customer[]>('kv', 'localCustomers')) ?? []
       await prune()
       state.sales = (await db.all<LocalSale>('sales')).sort(newestFirst)
       state.shifts = (await db.all<LocalShift>('shifts')).sort(newestFirst)
@@ -161,7 +165,7 @@ export function usePos() {
         return 'Este dispositivo tiene un turno abierto o ventas sin enviar de otra empresa. Entra con esa empresa para terminarlas.'
       }
       await db.clear()
-      Object.assign(state, { setup: null, catalog: null, shift: null, sales: [], shifts: [], accounts: [], cart: [], customer: null, stationId: null })
+      Object.assign(state, { setup: null, catalog: null, shift: null, sales: [], shifts: [], accounts: [], cart: [], customer: null, localCustomers: [], stationId: null })
     }
     return null
   }
@@ -232,11 +236,12 @@ export function usePos() {
     const since = state.catalog?.generatedAt ?? ''
     const products = new Map((state.catalog?.products ?? []).map(p => [p.id, p]))
     const effects = new Map((state.catalog?.optionGroups ?? []).flatMap(g => g.options).map(o => [o.id, o.effects]))
+    const waste = state.catalog?.supplyWaste ?? {}
     const sold: Record<string, number> = {}
     for (const sale of state.sales) {
       if (sale.soldAt > since) {
         for (const line of sale.lines) {
-          takesPerUnit(line, products.get(line.productId), effects).forEach((quantity, productId) => {
+          takesPerUnit(line, products.get(line.productId), effects, waste).forEach((quantity, productId) => {
             sold[productId] = (sold[productId] ?? 0) + quantity * line.quantity
           })
         }
@@ -407,7 +412,63 @@ export function usePos() {
     }
   }
 
-  const searchCustomers = (q: string) => api<Customer[]>('/app/pos/customers', { query: { q } })
+  /** The device's own customers that match, then (with internet) Falco's. */
+  async function searchCustomers(q: string): Promise<Customer[]> {
+    const text = q.trim().toLowerCase()
+    const local = state.localCustomers.filter(c => c.name.toLowerCase().includes(text) || (c.taxId ?? '').toLowerCase().includes(text)
+      || (c.phone ?? '').replace(/\D/g, '').includes(text.replace(/\D/g, '') || '-'))
+    if (!state.online) {
+      return local
+    }
+    return [...local, ...await api<Customer[]>('/app/pos/customers', { query: { q } })]
+  }
+
+  /**
+   * A customer the seller creates (FA-016). With internet Falco creates it (or answers with the one it
+   * has with that tax id, or with CF that phone); without it, it stays on the device and goes with the
+   * sale. It is chosen for the sale.
+   */
+  async function createCustomer(input: NewCustomer): Promise<{ customer: Customer, existing: boolean }> {
+    const body = {
+      clientId: crypto.randomUUID(),
+      name: input.name.trim(),
+      taxId: input.taxId.trim(),
+      phone: input.phone?.trim() || null,
+      address: input.address?.trim() || null
+    }
+    let result: { customer: Customer, existing: boolean } | null = null
+    if (state.online) {
+      try {
+        result = await api<{ customer: Customer, existing: boolean }>('/app/pos/customers', { method: 'POST', body })
+      } catch (error) {
+        if (statusOf(error) !== null) {
+          throw error
+        }
+      }
+    }
+    if (!result) {
+      const customer: Customer = { id: body.clientId, code: null, name: body.name, taxId: body.taxId, phone: body.phone, address: body.address, local: true }
+      state.localCustomers = [customer, ...state.localCustomers]
+      await db.put('kv', state.localCustomers, 'localCustomers')
+      result = { customer, existing: false }
+    }
+    setCustomer(result.customer)
+    return result
+  }
+
+  /** Once Falco has every sale of a device's customer, it is searched in Falco like the others. */
+  async function forgetSentCustomers() {
+    const waiting = new Set([
+      ...state.sales.filter(s => s.sync !== 'synced').map(s => s.customer?.id),
+      ...state.accounts.map(a => a.customer?.id),
+      state.customer?.id
+    ])
+    const keep = state.localCustomers.filter(c => waiting.has(c.id))
+    if (keep.length !== state.localCustomers.length) {
+      state.localCustomers = keep
+      await db.put('kv', keep, 'localCustomers')
+    }
+  }
 
   // ---- Charging
 
@@ -487,7 +548,10 @@ export function usePos() {
             })),
             sales: batch.map(s => ({
               clientId: s.clientId, shiftClientId: s.shiftClientId, sellerId: s.sellerId ?? null, number: s.number, soldAt: s.soldAt,
-              customerId: s.customer?.id ?? null,
+              customerId: s.customer && !s.customer.local ? s.customer.id : null,
+              newCustomer: s.customer?.local
+                ? { clientId: s.customer.id, name: s.customer.name, taxId: s.customer.taxId, phone: s.customer.phone || null, address: s.customer.address || null }
+                : null,
               lines: s.lines.map(l => ({
                 productId: l.productId, quantity: l.quantity, unitPrice: l.unitPrice, discountPercent: l.discountPercent || null,
                 options: l.options?.map(o => ({ optionId: o.optionId, quantity: o.quantity, price: o.price }))
@@ -516,6 +580,7 @@ export function usePos() {
           }
         }
       }
+      await forgetSentCustomers()
       state.lastSyncAt = new Date().toISOString()
       state.needsLogin = false
       await db.put('kv', state.lastSyncAt, 'lastSyncAt')
@@ -558,7 +623,7 @@ export function usePos() {
     switchSeller, sellersOf, refreshAlerts,
     state, pending, pendingSales, failed, load, checkAccess, adoptTenant, terminals, claim, downloadCatalog,
     currency, money, stockOf, openShift, closeShift, closingOf, salesOf,
-    station, cartTotals, cartCount, optionGroupsOf, addProduct, setQuantity, setDiscount, setCustomer, clearCart, selectStation, searchCustomers,
+    station, cartTotals, cartCount, optionGroupsOf, addProduct, setQuantity, setDiscount, setCustomer, clearCart, selectStation, searchCustomers, createCustomer,
     charge, sync
   }
 }

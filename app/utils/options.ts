@@ -9,10 +9,11 @@ export const optionsText = (options?: CartOption[]) =>
 
 /**
  * What one unit of a line takes from the warehouse, as Falco computes it: the product itself, or an
- * instant product's recipe; then its options (ADD once per time chosen; REPLACE and REMOVE once).
+ * instant product's recipe; then its options (ADD once per time chosen; REPLACE and REMOVE once). The
+ * supplies also take their expected waste (`waste`: % by supply, FA-015); the product itself does not.
  */
 export function takesPerUnit(line: Pick<CartLine, 'productId' | 'options'>, product: Product | undefined,
-  effects: Map<string, OptionEffect[]>): Map<string, number> {
+  effects: Map<string, OptionEffect[]>, waste: Record<string, number> = {}): Map<string, number> {
   const takes = new Map<string, number>()
   const add = (productId: string, quantity: number) => takes.set(productId, (takes.get(productId) ?? 0) + quantity)
   if (product?.instant) {
@@ -36,6 +37,11 @@ export function takesPerUnit(line: Pick<CartLine, 'productId' | 'options'>, prod
       }
     }
   }
+  takes.forEach((quantity, productId) => {
+    if (waste[productId]) {
+      takes.set(productId, quantity * (1 + waste[productId] / 100))
+    }
+  })
   if (!product?.instant) {
     add(line.productId, 1)
   }
