@@ -91,6 +91,8 @@ export interface Catalog {
     locale: string
     timezone: string
     saleDocumentName: string
+    /** The company's color in Falco (a Tailwind palette); missing in older catalogs. */
+    brandColor?: string
   }
   tax: { regime: string, label: string, rate: number, pricesIncludeTax: boolean }
   terminal: Terminal

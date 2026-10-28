@@ -3,6 +3,13 @@ const env = useRuntimeConfig().public.appEnv
 const prefix = env && env !== 'production' ? `[${env}] ` : ''
 const { browserTicket, settings } = usePrinter()
 
+// The company's color, as chosen in Falco; it comes with the catalog, so it stays without internet
+const appConfig = useAppConfig()
+const { state } = usePos()
+watch(() => state.catalog?.company.brandColor, (color) => {
+  appConfig.ui.colors.primary = brandColorOf(color)
+}, { immediate: true })
+
 useHead({
   titleTemplate: title => `${prefix}${title ? `${title} · Falco POS` : 'Falco POS'}`
 })
