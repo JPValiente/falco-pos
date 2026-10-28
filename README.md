@@ -17,7 +17,8 @@ Usa Nuxt 4 y Nuxt UI, igual que el ERP (falco-frontend). Es una app estática, s
    - Cliente opcional: consumidor final por defecto; buscar clientes necesita internet.
    - Cobro en efectivo, transferencia o tarjeta, o mezclados, con cálculo del vuelto.
    - Nunca se deja de vender: si la existencia se acaba, la venta se registra igual y el ERP avisa en el tablero ("Existencia negativa").
-   - **Preparación instantánea** (un café): el producto no tiene existencia propia; al venderlo salen sus insumos de la bodega del punto de venta. El catálogo trae la receta, así que las tarjetas de los insumos bajan al momento, también sin internet.
+   - **Preparación instantánea** (una hamburguesa, un licuado, un café): el producto no tiene existencia propia; al venderlo salen sus insumos de la bodega del punto de venta. El catálogo trae la receta, así que las tarjetas de los insumos bajan al momento, también sin internet.
+   - **Opciones** (extras, término, tipo de leche): al tocar un producto que las tiene, se eligen antes de agregarlo y no deja agregarlo sin las obligatorias. Lo que suman va en el precio de la línea, el ticket las muestra y las existencias de la tarjeta toman en cuenta lo que agregan, cambian o quitan. El mismo producto con otras opciones es otra línea.
    - **Campanita:** avisa de lo que está en negativo, agotado o bajo el mínimo en la bodega del punto de venta. Se actualiza al descargar el catálogo y después de cada envío; el punto rojo indica avisos no vistos en este dispositivo.
 5. **Cuentas abiertas.** Solo en puntos de venta con "Cuentas abiertas (restaurantes)" activado.
    - Cada mesa o lugar, configurado en el ERP, lleva su cuenta hasta cobrarla.

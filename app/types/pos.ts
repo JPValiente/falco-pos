@@ -90,6 +90,8 @@ export interface Catalog {
   seller: { id: string, name: string, canDiscount: boolean, canManage: boolean }
   categories: NamedRef[]
   products: Product[]
+  /** Groups of options the products offer (FA-014); missing in catalogs downloaded before they existed. */
+  optionGroups?: OptionGroup[]
   finalConsumer: Customer
   generatedAt: string
 }
@@ -107,6 +109,35 @@ export interface Product {
   instant: boolean
   /** What one unit of an instant product takes; missing in catalogs downloaded before it existed. */
   supplies?: { productId: string, quantity: number }[]
+  /** Groups of options asked when selling it, in order. */
+  optionGroups?: string[]
+}
+
+/** What an option does to the supplies, per unit: ADD more; REPLACE one of the recipe; REMOVE one. */
+export interface OptionEffect {
+  kind: 'ADD' | 'REPLACE' | 'REMOVE'
+  product: { id: string, name: string, unitSymbol: string }
+  replaces: { id: string, name: string } | null
+  /** Null in REMOVE, and in REPLACE for the same quantity. */
+  quantity: number | null
+}
+
+export interface ProductOption {
+  id: string
+  name: string
+  /** Added to the unit price each time it is chosen. */
+  price: number
+  effects: OptionEffect[]
+}
+
+/** "Leche" (choose one) or "Extras" (several, an option may repeat up to maxQuantity in all). */
+export interface OptionGroup {
+  id: string
+  name: string
+  multiple: boolean
+  required: boolean
+  maxQuantity: number | null
+  options: ProductOption[]
 }
 
 /** NEGATIVE: below zero in the warehouse; OUT: a supply ran out; LOW: under the minimum (all warehouses). */
@@ -139,15 +170,28 @@ export const PAYMENT_METHODS: Record<PaymentMethod, { label: string, icon: strin
   CARD: { label: 'Tarjeta', icon: 'i-lucide-credit-card' }
 }
 
+/** An option chosen on a line, `quantity` times per unit, at `price` each time. */
+export interface CartOption {
+  optionId: string
+  group: string
+  name: string
+  quantity: number
+  price: number
+}
+
 export interface CartLine {
+  /** The product and its options: the same product with other options is another line. Missing in older carts (the product). */
+  key?: string
   productId: string
   code: string
   name: string
   unitSymbol: string | null
   quantity: number
+  /** Includes what the options add. */
   unitPrice: number
   /** 0 to 100; only who may discount sets it. */
   discountPercent: number
+  options?: CartOption[]
 }
 
 export interface Totals {

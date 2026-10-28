@@ -17,7 +17,7 @@ function editDiscount(line: CartLine) {
 
 function saveDiscount() {
   if (discountLine.value) {
-    pos.setDiscount(discountLine.value.productId, Number(discountValue.value) || 0)
+    pos.setDiscount(lineKey(discountLine.value), Number(discountValue.value) || 0)
   }
   discountLine.value = null
 }
@@ -62,13 +62,21 @@ function saveDiscount() {
       >
         <li
           v-for="line in state.cart"
-          :key="line.productId"
+          :key="lineKey(line)"
           class="space-y-2 p-3"
         >
           <div class="flex items-start gap-2">
-            <p class="min-w-0 flex-1 text-sm font-medium text-highlighted">
-              {{ line.name }}
-            </p>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-highlighted">
+                {{ line.name }}
+              </p>
+              <p
+                v-if="line.options?.length"
+                class="text-xs text-muted"
+              >
+                {{ optionsText(line.options) }}
+              </p>
+            </div>
             <p class="text-sm font-semibold text-highlighted tabular-nums">
               {{ money(lineAmount(line)) }}
             </p>
@@ -78,11 +86,12 @@ function saveDiscount() {
               :model-value="line.quantity"
               :min="0"
               :step="1"
+              :step-snapping="false"
               :format-options="{ maximumFractionDigits: 4 }"
               size="md"
               class="w-32"
               :aria-label="`Cantidad de ${line.name}`"
-              @update:model-value="value => pos.setQuantity(line.productId, Number(value) || 0)"
+              @update:model-value="value => pos.setQuantity(lineKey(line), Number(value) || 0)"
             />
             <span class="text-xs text-muted">× {{ money(line.unitPrice) }}</span>
             <UBadge
@@ -105,7 +114,7 @@ function saveDiscount() {
                 color="error"
                 variant="ghost"
                 :aria-label="`Quitar ${line.name}`"
-                @click="pos.setQuantity(line.productId, 0)"
+                @click="pos.setQuantity(lineKey(line), 0)"
               />
             </div>
           </div>
@@ -170,6 +179,7 @@ function saveDiscount() {
               :min="0"
               :max="100"
               :step="5"
+              :step-snapping="false"
               size="xl"
               class="w-full"
             />

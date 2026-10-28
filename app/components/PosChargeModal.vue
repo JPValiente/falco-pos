@@ -137,6 +137,7 @@ async function confirm() {
               <UInputNumber
                 v-model="row.amount"
                 :min="0"
+                :step-snapping="false"
                 :step="1"
                 :format-options="{ minimumFractionDigits: 2, maximumFractionDigits: 2 }"
                 size="xl"

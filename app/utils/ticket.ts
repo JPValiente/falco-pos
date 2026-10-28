@@ -80,6 +80,9 @@ export function ticketLines(sale: LocalSale, catalog: Catalog, paper: PaperWidth
   rule()
   for (const line of sale.lines) {
     wrap(line.name, width).forEach(text => out.push({ text }))
+    if (line.options?.length) {
+      wrap(`  ${optionsText(line.options)}`, width).forEach(text => out.push({ text }))
+    }
     const detail = `  ${formatQuantity(line.quantity)} x ${money(line.unitPrice)}${line.discountPercent ? ` -${line.discountPercent}%` : ''}`
     out.push({ text: pair(detail, money(lineAmount(line)), width) })
   }

@@ -152,6 +152,7 @@ async function close() {
           <UInputNumber
             v-model="counted"
             :min="0"
+            :step-snapping="false"
             :step="1"
             :format-options="{ style: 'currency', currency: pos.currency.value }"
             size="xl"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LocalSale, Product } from '~/types/pos'
+import type { CartOption, LocalSale, Product } from '~/types/pos'
 
 useHead({ title: 'Vender' })
 
@@ -32,8 +32,20 @@ function stockLabel(product: Product) {
   return `${formatQuantity(stock)}${product.unitSymbol ? ` ${product.unitSymbol}` : ''}`
 }
 
+/** A product with options asks for them first. */
+const choosing = ref<Product | null>(null)
 function add(product: Product) {
-  pos.addProduct(product)
+  if (pos.optionGroupsOf(product).length) {
+    choosing.value = product
+  } else {
+    pos.addProduct(product)
+  }
+}
+function addWithOptions(options: CartOption[]) {
+  if (choosing.value) {
+    pos.addProduct(choosing.value, 1, options)
+  }
+  choosing.value = null
 }
 
 async function openShift() {
@@ -113,6 +125,7 @@ function startCharge() {
           <UInputNumber
             v-model="openingFloat"
             :min="0"
+            :step-snapping="false"
             :step="1"
             :format-options="{ style: 'currency', currency: pos.currency.value }"
             size="xl"
@@ -263,6 +276,12 @@ function startCharge() {
         />
       </template>
     </USlideover>
+
+    <PosOptions
+      :product="choosing"
+      @close="choosing = null"
+      @add="addWithOptions"
+    />
 
     <PosChargeModal
       v-model:open="chargeOpen"

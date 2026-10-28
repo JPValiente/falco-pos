@@ -1,6 +1,6 @@
 import type {
-  AppContext, CartLine, Catalog, ClaimResult, Customer, LocalSale, LocalShift, OpenAccount, Payment, Product, Setup,
-  ShiftClosing, Station, StockAlert, SyncResult, Terminal
+  AppContext, CartLine, CartOption, Catalog, ClaimResult, Customer, LocalSale, LocalShift, OpenAccount, OptionGroup, Payment,
+  Product, Setup, ShiftClosing, Station, StockAlert, SyncResult, Terminal
 } from '~/types/pos'
 
 const DEVICE_KEY = 'falco_pos_device_id'
@@ -224,23 +224,21 @@ export function usePos() {
   const currency = computed(() => state.catalog?.company.currency ?? 'GTQ')
   const money = (value: number) => formatMoney(value, currency.value, state.catalog?.company.locale)
 
-  /** Stock as Falco had it, less what the device sold since the catalog was downloaded (an instant product takes its supplies). */
+  /**
+   * Stock as Falco had it, less what the device sold since the catalog was downloaded: a product takes
+   * itself, an instant one its recipe, and the options change it as Falco does (see takesPerUnit).
+   */
   const soldSinceCatalog = computed(() => {
     const since = state.catalog?.generatedAt ?? ''
-    const recipes = new Map((state.catalog?.products ?? []).filter(p => p.supplies?.length).map(p => [p.id, p.supplies]))
+    const products = new Map((state.catalog?.products ?? []).map(p => [p.id, p]))
+    const effects = new Map((state.catalog?.optionGroups ?? []).flatMap(g => g.options).map(o => [o.id, o.effects]))
     const sold: Record<string, number> = {}
-    const take = (productId: string, quantity: number) => {
-      sold[productId] = (sold[productId] ?? 0) + quantity
-    }
     for (const sale of state.sales) {
       if (sale.soldAt > since) {
         for (const line of sale.lines) {
-          const recipe = recipes.get(line.productId)
-          if (recipe) {
-            recipe.forEach(supply => take(supply.productId, supply.quantity * line.quantity))
-          } else {
-            take(line.productId, line.quantity)
-          }
+          takesPerUnit(line, products.get(line.productId), effects).forEach((quantity, productId) => {
+            sold[productId] = (sold[productId] ?? 0) + quantity * line.quantity
+          })
         }
       }
     }
@@ -336,34 +334,42 @@ export function usePos() {
     }
   }
 
-  function addProduct(product: Product, quantity = 1) {
-    const line = state.cart.find(l => l.productId === product.id)
+  /** The groups of options a product asks for, in order. */
+  const optionGroupsOf = (product: Product): OptionGroup[] => (product.optionGroups ?? [])
+    .map(id => state.catalog?.optionGroups?.find(g => g.id === id))
+    .filter((g): g is OptionGroup => !!g && g.options.length > 0)
+
+  /** The same product with the same options adds to its line; with other options it is another line. */
+  function addProduct(product: Product, quantity = 1, options: CartOption[] = []) {
+    const key = [product.id, ...options.map(o => `${o.optionId}x${o.quantity}`).sort()].join('|')
+    const line = state.cart.find(l => lineKey(l) === key)
     if (line) {
       line.quantity = round(line.quantity + quantity, 4)
     } else {
+      const extra = options.reduce((sum, o) => sum + o.price * o.quantity, 0)
       state.cart.push({
-        productId: product.id, code: product.code, name: product.name, unitSymbol: product.unitSymbol,
-        quantity, unitPrice: product.price, discountPercent: 0
+        key, productId: product.id, code: product.code, name: product.name, unitSymbol: product.unitSymbol,
+        quantity, unitPrice: round(product.price + extra, 6), discountPercent: 0, options
       })
     }
     persistCart()
   }
 
-  function setQuantity(productId: string, quantity: number) {
-    const line = state.cart.find(l => l.productId === productId)
+  function setQuantity(key: string, quantity: number) {
+    const line = state.cart.find(l => lineKey(l) === key)
     if (!line) {
       return
     }
     if (quantity <= 0) {
-      state.cart = state.cart.filter(l => l.productId !== productId)
+      state.cart = state.cart.filter(l => lineKey(l) !== key)
     } else {
       line.quantity = round(quantity, 4)
     }
     persistCart()
   }
 
-  function setDiscount(productId: string, percent: number) {
-    const line = state.cart.find(l => l.productId === productId)
+  function setDiscount(key: string, percent: number) {
+    const line = state.cart.find(l => lineKey(l) === key)
     if (line && state.catalog?.seller.canDiscount) {
       line.discountPercent = Math.min(100, Math.max(0, round(percent)))
       persistCart()
@@ -482,7 +488,10 @@ export function usePos() {
             sales: batch.map(s => ({
               clientId: s.clientId, shiftClientId: s.shiftClientId, sellerId: s.sellerId ?? null, number: s.number, soldAt: s.soldAt,
               customerId: s.customer?.id ?? null,
-              lines: s.lines.map(l => ({ productId: l.productId, quantity: l.quantity, unitPrice: l.unitPrice, discountPercent: l.discountPercent || null })),
+              lines: s.lines.map(l => ({
+                productId: l.productId, quantity: l.quantity, unitPrice: l.unitPrice, discountPercent: l.discountPercent || null,
+                options: l.options?.map(o => ({ optionId: o.optionId, quantity: o.quantity, price: o.price }))
+              })),
               payments: s.payments.filter(p => p.amount > 0).map(p => ({ method: p.method, amount: p.amount, reference: p.reference || null })),
               account: s.account, notes: s.notes
             }))
@@ -549,7 +558,7 @@ export function usePos() {
     switchSeller, sellersOf, refreshAlerts,
     state, pending, pendingSales, failed, load, checkAccess, adoptTenant, terminals, claim, downloadCatalog,
     currency, money, stockOf, openShift, closeShift, closingOf, salesOf,
-    station, cartTotals, cartCount, addProduct, setQuantity, setDiscount, setCustomer, clearCart, selectStation, searchCustomers,
+    station, cartTotals, cartCount, optionGroupsOf, addProduct, setQuantity, setDiscount, setCustomer, clearCart, selectStation, searchCustomers,
     charge, sync
   }
 }
