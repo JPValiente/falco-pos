@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+
+  --color-green-50: #EFFDF5;
+  --color-green-100: #D9FBE8;
+  --color-green-200: #B3F5D1;
+  --color-green-300: #75EDAE;
+  --color-green-400: #00DC82;
+  --color-green-500: #00C16A;
+  --color-green-600: #00A155;
+  --color-green-700: #007F45;
+  --color-green-800: #016538;
+  --color-green-900: #0A5331;
+  --color-green-950: #052E16;
+}
+
+/* Screens: light gray background with white cards (falco-card); a little darker in dark mode */
+.falco-page {
+  background-color: var(--ui-bg-muted);
+}
+.dark .falco-page {
+  background-color: var(--ui-color-neutral-950);
+}
+.falco-card {
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--ui-radius) * 3);
+  background-color: var(--ui-bg);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 6px rgb(15 23 42 / 0.04);
+}
+.dark .falco-card {
+  box-shadow: none;
+}
+
+/* The ticket printed by the browser (utils/ticket.ts): only it goes to paper, as wide as the roll */
+.falco-ticket {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .falco-ticket,
+  .falco-ticket * {
+    visibility: visible;
+  }
+  .falco-ticket {
+    display: block;
+    position: absolute;
+    inset: 0 auto auto 0;
+    padding: 2mm;
+    color: #000;
+    background: #fff;
+    font: 11px/1.25 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre;
+  }
+}
