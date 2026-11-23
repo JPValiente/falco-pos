@@ -14,6 +14,8 @@ Punto de venta de Falco: Nuxt 4, Nuxt UI 4, pnpm, app estática (`ssr: false`) e
 
 ## Convenciones
 
+- Para crear o rediseñar una pantalla, usa la skill `disenar-ui` de `Falco-docs`.
+
 - **Debe vender sin internet.** Lo nuevo tiene que funcionar con el catálogo guardado o decir con claridad que necesita conexión.
 - **Nunca se deja de vender:** lo vendido sin conexión se acepta siempre al sincronizar.
 - Un dispositivo puede tener un catálogo viejo: los campos nuevos son opcionales en `types/pos.ts` y tienen un valor por defecto.
